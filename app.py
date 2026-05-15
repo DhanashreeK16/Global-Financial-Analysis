@@ -1,190 +1,156 @@
-{
- "cells": [
-  {
-   "cell_type": "code",
-   "execution_count": null,
-   "id": "6cb45f53-61f4-40c8-b005-7f3ec3811b36",
-   "metadata": {},
-   "outputs": [],
-   "source": [
-    "import streamlit as st\n",
-    "import pandas as pd\n",
-    "import plotly.graph_objects as go\n",
-    "import plotly.express as px\n",
-    "import os\n",
-    "\n",
-    "st.set_page_config(page_title=\"Global Stock Trading Dashboard\",\n",
-    "                   layout=\"wide\",\n",
-    "                   page_icon=\"📈\")\n",
-    "\n",
-    "# ---------------- STYLE ----------------\n",
-    "st.markdown(\"\"\"\n",
-    "<style>\n",
-    ".big-font {\n",
-    "    font-size:28px !important;\n",
-    "    font-weight:600;\n",
-    "}\n",
-    ".metric-card {\n",
-    "    background-color:#111111;\n",
-    "    padding:15px;\n",
-    "    border-radius:10px;\n",
-    "    text-align:center;\n",
-    "}\n",
-    "</style>\n",
-    "\"\"\", unsafe_allow_html=True)\n",
-    "\n",
-    "# ---------------- LOAD DATA ----------------\n",
-    "@st.cache_data\n",
-    "def load_data():\n",
-    "    base_path = os.path.dirname(os.path.abspath(__file__))\n",
-    "    file_path = os.path.join(base_path, \"Global_Stock_Data.csv\")\n",
-    "\n",
-    "    df = pd.read_csv(file_path)\n",
-    "    df[\"Date\"] = pd.to_datetime(df[\"Date\"], errors=\"coerce\")\n",
-    "    return df\n",
-    "\n",
-    "df = load_data()\n",
-    "\n",
-    "# ---------------- SIDEBAR FILTERS ----------------\n",
-    "st.sidebar.title(\"📌 Filters\")\n",
-    "\n",
-    "country = st.sidebar.selectbox(\n",
-    "    \"Country\",\n",
-    "    sorted(df[\"Country\"].dropna().unique())\n",
-    ")\n",
-    "\n",
-    "country_df = df[df[\"Country\"] == country]\n",
-    "\n",
-    "company = st.sidebar.selectbox(\n",
-    "    \"Company\",\n",
-    "    sorted(country_df[\"Company\"].dropna().unique())\n",
-    ")\n",
-    "\n",
-    "filtered_df = country_df[country_df[\"Company\"] == company]\n",
-    "\n",
-    "start_date = st.sidebar.date_input(\"Start Date\", filtered_df[\"Date\"].min())\n",
-    "end_date = st.sidebar.date_input(\"End Date\", filtered_df[\"Date\"].max())\n",
-    "\n",
-    "filtered_df = filtered_df[\n",
-    "    (filtered_df[\"Date\"] >= pd.to_datetime(start_date)) &\n",
-    "    (filtered_df[\"Date\"] <= pd.to_datetime(end_date))\n",
-    "]\n",
-    "\n",
-    "if filtered_df.empty:\n",
-    "    st.warning(\"No data available\")\n",
-    "    st.stop()\n",
-    "\n",
-    "# ---------------- HEADER (FIXED TOP) ----------------\n",
-    "latest_price = filtered_df[\"Close\"].iloc[-1]\n",
-    "first_price = filtered_df[\"Close\"].iloc[0]\n",
-    "percent = ((latest_price - first_price) / first_price) * 100\n",
-    "\n",
-    "st.markdown(\n",
-    "    f\"<div class='big-font'>📈 {company} ({country})</div>\",\n",
-    "    unsafe_allow_html=True\n",
-    ")\n",
-    "\n",
-    "if percent >= 0:\n",
-    "    st.markdown(f\"### ₹ {latest_price:.2f}  🔼 {percent:.2f}%\")\n",
-    "else:\n",
-    "    st.markdown(f\"### ₹ {latest_price:.2f}  🔽 {percent:.2f}%\")\n",
-    "\n",
-    "st.markdown(\"---\")\n",
-    "\n",
-    "# ---------------- KPI + CHART LAYOUT ----------------\n",
-    "left_col, right_col = st.columns([2,1])\n",
-    "\n",
-    "with left_col:\n",
-    "\n",
-    "    chart_type = st.radio(\n",
-    "        \"Chart Type\",\n",
-    "        [\"Line\", \"Candlestick\"],\n",
-    "        horizontal=True\n",
-    "    )\n",
-    "\n",
-    "    fig = go.Figure()\n",
-    "\n",
-    "    if chart_type == \"Line\":\n",
-    "        fig.add_trace(go.Scatter(\n",
-    "            x=filtered_df[\"Date\"],\n",
-    "            y=filtered_df[\"Close\"],\n",
-    "            mode='lines',\n",
-    "            name='Close'\n",
-    "        ))\n",
-    "    else:\n",
-    "        fig.add_trace(go.Candlestick(\n",
-    "            x=filtered_df[\"Date\"],\n",
-    "            open=filtered_df[\"Open\"],\n",
-    "            high=filtered_df[\"High\"],\n",
-    "            low=filtered_df[\"Low\"],\n",
-    "            close=filtered_df[\"Close\"],\n",
-    "            name=\"Candle\"\n",
-    "        ))\n",
-    "\n",
-    "    fig.update_layout(\n",
-    "        template=\"plotly_dark\",\n",
-    "        height=450,\n",
-    "        margin=dict(l=20, r=20, t=30, b=20)\n",
-    "    )\n",
-    "\n",
-    "    st.plotly_chart(fig, use_container_width=True)\n",
-    "\n",
-    "with right_col:\n",
-    "\n",
-    "    st.markdown(\"### 📊 Key Metrics\")\n",
-    "\n",
-    "    high_price = filtered_df[\"High\"].max()\n",
-    "    low_price = filtered_df[\"Low\"].min()\n",
-    "    total_volume = int(filtered_df[\"Volume\"].sum())\n",
-    "\n",
-    "    st.metric(\"Highest Price\", f\"{high_price:.2f}\")\n",
-    "    st.metric(\"Lowest Price\", f\"{low_price:.2f}\")\n",
-    "    st.metric(\"Total Volume\", f\"{total_volume:,}\")\n",
-    "\n",
-    "    st.markdown(\"### 📌 Market Insight\")\n",
-    "\n",
-    "    if percent > 0:\n",
-    "        st.success(\"Stock is in upward trend.\")\n",
-    "    elif percent < 0:\n",
-    "        st.error(\"Stock is in downward trend.\")\n",
-    "    else:\n",
-    "        st.info(\"Stock is stable.\")\n",
-    "\n",
-    "# ---------------- VOLUME (COMPACT BELOW) ----------------\n",
-    "st.markdown(\"---\")\n",
-    "\n",
-    "fig_volume = px.bar(\n",
-    "    filtered_df,\n",
-    "    x=\"Date\",\n",
-    "    y=\"Volume\",\n",
-    "    template=\"plotly_dark\"\n",
-    ")\n",
-    "\n",
-    "fig_volume.update_layout(height=250, margin=dict(l=20, r=20, t=20, b=20))\n",
-    "\n",
-    "st.plotly_chart(fig_volume, use_container_width=True)"
-   ]
-  }
- ],
- "metadata": {
-  "kernelspec": {
-   "display_name": "Python 3 (ipykernel)",
-   "language": "python",
-   "name": "python3"
-  },
-  "language_info": {
-   "codemirror_mode": {
-    "name": "ipython",
-    "version": 3
-   },
-   "file_extension": ".py",
-   "mimetype": "text/x-python",
-   "name": "python",
-   "nbconvert_exporter": "python",
-   "pygments_lexer": "ipython3",
-   "version": "3.13.9"
-  }
- },
- "nbformat": 4,
- "nbformat_minor": 5
+import streamlit as st
+import pandas as pd
+import plotly.graph_objects as go
+import plotly.express as px
+import os
+
+st.set_page_config(page_title="Global Stock Trading Dashboard",
+                   layout="wide",
+                   page_icon="📈")
+
+# ---------------- STYLE ----------------
+st.markdown("""
+<style>
+.big-font {
+    font-size:28px !important;
+    font-weight:600;
 }
+.metric-card {
+    background-color:#111111;
+    padding:15px;
+    border-radius:10px;
+    text-align:center;
+}
+</style>
+""", unsafe_allow_html=True)
+
+# ---------------- LOAD DATA ----------------
+@st.cache_data
+def load_data():
+    base_path = os.path.dirname(os.path.abspath(__file__))
+    file_path = os.path.join(base_path, "Global_Stock_Data.csv")
+
+    df = pd.read_csv(file_path)
+    df["Date"] = pd.to_datetime(df["Date"], errors="coerce")
+    return df
+
+df = load_data()
+
+# ---------------- SIDEBAR FILTERS ----------------
+st.sidebar.title("📌 Filters")
+
+country = st.sidebar.selectbox(
+    "Country",
+    sorted(df["Country"].dropna().unique())
+)
+
+country_df = df[df["Country"] == country]
+
+company = st.sidebar.selectbox(
+    "Company",
+    sorted(country_df["Company"].dropna().unique())
+)
+
+filtered_df = country_df[country_df["Company"] == company]
+
+start_date = st.sidebar.date_input("Start Date", filtered_df["Date"].min())
+end_date = st.sidebar.date_input("End Date", filtered_df["Date"].max())
+
+filtered_df = filtered_df[
+    (filtered_df["Date"] >= pd.to_datetime(start_date)) &
+    (filtered_df["Date"] <= pd.to_datetime(end_date))
+]
+
+if filtered_df.empty:
+    st.warning("No data available")
+    st.stop()
+
+# ---------------- HEADER (FIXED TOP) ----------------
+latest_price = filtered_df["Close"].iloc[-1]
+first_price = filtered_df["Close"].iloc[0]
+percent = ((latest_price - first_price) / first_price) * 100
+
+st.markdown(
+    f"<div class='big-font'>📈 {company} ({country})</div>",
+    unsafe_allow_html=True
+)
+
+if percent >= 0:
+    st.markdown(f"### ₹ {latest_price:.2f}  🔼 {percent:.2f}%")
+else:
+    st.markdown(f"### ₹ {latest_price:.2f}  🔽 {percent:.2f}%")
+
+st.markdown("---")
+
+# ---------------- KPI + CHART LAYOUT ----------------
+left_col, right_col = st.columns([2,1])
+
+with left_col:
+
+    chart_type = st.radio(
+        "Chart Type",
+        ["Line", "Candlestick"],
+        horizontal=True
+    )
+
+    fig = go.Figure()
+
+    if chart_type == "Line":
+        fig.add_trace(go.Scatter(
+            x=filtered_df["Date"],
+            y=filtered_df["Close"],
+            mode='lines',
+            name='Close'
+        ))
+    else:
+        fig.add_trace(go.Candlestick(
+            x=filtered_df["Date"],
+            open=filtered_df["Open"],
+            high=filtered_df["High"],
+            low=filtered_df["Low"],
+            close=filtered_df["Close"],
+            name="Candle"
+        ))
+
+    fig.update_layout(
+        template="plotly_dark",
+        height=450,
+        margin=dict(l=20, r=20, t=30, b=20)
+    )
+
+    st.plotly_chart(fig, use_container_width=True)
+
+with right_col:
+
+    st.markdown("### 📊 Key Metrics")
+
+    high_price = filtered_df["High"].max()
+    low_price = filtered_df["Low"].min()
+    total_volume = int(filtered_df["Volume"].sum())
+
+    st.metric("Highest Price", f"{high_price:.2f}")
+    st.metric("Lowest Price", f"{low_price:.2f}")
+    st.metric("Total Volume", f"{total_volume:,}")
+
+    st.markdown("### 📌 Market Insight")
+
+    if percent > 0:
+        st.success("Stock is in upward trend.")
+    elif percent < 0:
+        st.error("Stock is in downward trend.")
+    else:
+        st.info("Stock is stable.")
+
+# ---------------- VOLUME (COMPACT BELOW) ----------------
+st.markdown("---")
+
+fig_volume = px.bar(
+    filtered_df,
+    x="Date",
+    y="Volume",
+    template="plotly_dark"
+)
+
+fig_volume.update_layout(height=250, margin=dict(l=20, r=20, t=20, b=20))
+
+st.plotly_chart(fig_volume, use_container_width=True)
